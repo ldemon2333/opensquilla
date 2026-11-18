@@ -352,6 +352,9 @@ async def run_agent_once(
                 for name in ("expected_session_id", "expected_session_epoch")
             ):
                 raise RuntimeError("Session reader cannot enforce a durable owner")
+        # The model router commits its decision against the durable user message,
+        # like the gateway path does with persisted_user_message_id.
+        bound_user_message_id: str | None = None
         if run_attachments:
             from opensquilla.gateway.transcripts import build_transcript_attachment_envelope
 
@@ -376,12 +379,13 @@ async def run_agent_once(
                 persist_enabled=persist_enabled,
                 disk_budget_bytes=disk_budget if isinstance(disk_budget, int) else None,
             )
-            await svc.session_manager.append_message(
+            _persisted_attachment = await svc.session_manager.append_message(
                 session_key,
                 role="user",
                 content=persist_content,
                 **owner_kwargs,
             )
+            bound_user_message_id = getattr(_persisted_attachment, "message_id", None)
         else:
             _persisted = await svc.session_manager.append_message(
                 session_key,
@@ -391,6 +395,7 @@ async def run_agent_once(
             )
             if _persisted is not None and isinstance(_persisted.content, str):
                 message = _persisted.content
+            bound_user_message_id = getattr(_persisted, "message_id", None)
 
         route_envelope = build_cli_route_envelope(
             session_key=session_key,
@@ -503,6 +508,7 @@ async def run_agent_once(
             max_provider_retries=max_provider_retries,
             length_capped_continuations=length_capped_continuations,
             history_has_persisted_user=True,
+            bound_user_message_id=bound_user_message_id,
             no_memory_capture=no_memory_capture,
             attachments=run_attachments,
             bootstrap_context_mode=bootstrap_context_mode,
