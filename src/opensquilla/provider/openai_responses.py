@@ -41,6 +41,7 @@ from .protocol import (
     ProviderMetadata,
     ProviderModelListingResponseError,
 )
+from .reasoning_dialects import _resolve_reasoning_effort
 from .recovery_origin import transport_recovery_origin
 from .request_proof import (
     RESPONSES_REQUEST_ENVELOPE,
@@ -272,6 +273,13 @@ class OpenAIResponsesProvider:
             "max_output_tokens": config.max_tokens,
             "store": False,
         }
+        if config.thinking:
+            # Responses-API form of the effort dialect: send the turn's thinking level
+            # (e.g. SquillaRouter auto-thinking) as reasoning.effort. Thinking off sends
+            # no field, as the openrouter dialect does for models without an off switch.
+            payload["reasoning"] = {
+                "effort": _resolve_reasoning_effort(config.thinking_level, config.thinking_budget_tokens)
+            }
         if config.output_json_schema is not None:
             payload["text"] = {
                 "format": {
